@@ -12,8 +12,8 @@ DARWIN = RbConfig::CONFIG["host_os"] =~ /darwin/
 class BuildError < StandardError; end
 
 def run(*cmd)
-  warn "elelem: + #{cmd.join(' ')}"
-  system(*cmd) || raise(BuildError, "build step failed: #{cmd.join(' ')}")
+  warn "elelem: + #{cmd.join(" ")}"
+  system(*cmd) || raise(BuildError, "build step failed: #{cmd.join(" ")}")
 end
 
 def configure_and_build
@@ -30,7 +30,8 @@ def configure_and_build
 end
 
 unless File.exist?(File.join(VENDOR, "CMakeLists.txt"))
-  abort "elelem: vendored stable-diffusion.cpp missing at #{VENDOR}\n        run: git submodule update --init --recursive"
+  abort "elelem: vendored stable-diffusion.cpp missing at #{VENDOR}\n        " \
+        "run: git submodule update --init --recursive"
 end
 
 def find_archive(name)
@@ -48,7 +49,8 @@ def link_shim
 
   cxx = ENV["CXX"] || "c++"
   whole_archive = DARWIN ? [] : ["-Wl,--whole-archive", sd_archive, *ggml_archives, "-Wl,--no-whole-archive"]
-  archive_flags = DARWIN ? ["-Wl,-force_load,#{sd_archive}", *ggml_archives.flat_map { |a| ["-Wl,-force_load,#{a}"] }] : whole_archive
+  force_loaded = ggml_archives.flat_map { |a| ["-Wl,-force_load,#{a}"] }
+  archive_flags = DARWIN ? ["-Wl,-force_load,#{sd_archive}", *force_loaded] : whole_archive
   visibility_flags = DARWIN ? [] : ["-Wl,--exclude-libs,ALL"]
   omp_flags = DARWIN ? [] : ["-fopenmp"]
   omp_link_flags = DARWIN ? [] : ["-lgomp"]

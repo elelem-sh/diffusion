@@ -2,7 +2,7 @@
 
 RSpec.describe Elelem::Diffusion do
   around do |example|
-    original = ENV["ELELEM_SD_IMAGE_MODEL"]
+    original = ENV.fetch("ELELEM_SD_IMAGE_MODEL", nil)
     ENV["ELELEM_SD_IMAGE_MODEL"] = "/models/sd.gguf"
     example.run
   ensure
@@ -104,7 +104,8 @@ RSpec.describe Elelem::Diffusion do
 
       described_class.img2img(prompt: "make it blue", input_path: "/tmp/in.png", path: "/tmp/out.png")
 
-      expect(img2img_fn).to have_received(:call).with(handle, "make it blue", "", "/tmp/in.png", 0.5, 20, 42, "/tmp/out.png")
+      expect(img2img_fn).to have_received(:call).with(handle, "make it blue", "", "/tmp/in.png", 0.5, 20, 42,
+                                                      "/tmp/out.png")
     end
 
     it "returns ok: false when img2img fails" do
@@ -118,7 +119,8 @@ RSpec.describe Elelem::Diffusion do
 
   describe ".video" do
     around do |example|
-      original = { model: ENV["ELELEM_SD_VIDEO_MODEL"], vae: ENV["ELELEM_SD_VIDEO_VAE"], t5xxl: ENV["ELELEM_SD_VIDEO_T5XXL"] }
+      original = { model: ENV.fetch("ELELEM_SD_VIDEO_MODEL", nil), vae: ENV.fetch("ELELEM_SD_VIDEO_VAE", nil),
+                   t5xxl: ENV.fetch("ELELEM_SD_VIDEO_T5XXL", nil) }
       ENV["ELELEM_SD_VIDEO_MODEL"] = "/models/wan.safetensors"
       ENV["ELELEM_SD_VIDEO_VAE"] = "/models/wan_vae.safetensors"
       ENV["ELELEM_SD_VIDEO_T5XXL"] = "/models/t5xxl.gguf"
@@ -205,7 +207,7 @@ RSpec.describe Elelem::Diffusion do
 
   describe ".upscale" do
     around do |example|
-      original = ENV["ELELEM_SD_ESRGAN_MODEL"]
+      original = ENV.fetch("ELELEM_SD_ESRGAN_MODEL", nil)
       ENV["ELELEM_SD_ESRGAN_MODEL"] = "/models/esrgan.pth"
       example.run
     ensure

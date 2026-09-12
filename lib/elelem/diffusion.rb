@@ -17,7 +17,7 @@ module Elelem
     F = Fiddle::TYPE_FLOAT
 
     MUTEX = Mutex.new
-    CONTEXTS = {}
+    CONTEXTS = {} # rubocop:disable Style/MutableConstant
 
     def self.available?
       File.exist?(SHIM)
@@ -52,7 +52,7 @@ module Elelem
     end
 
     def self.generate(prompt:, path:, negative_prompt: "", steps: 20, width: 512, height: 512, seed: 42, n_threads: nil)
-      with_context(n_threads: n_threads) do |model, handle|
+      with_context(n_threads: n_threads) do |_model, handle|
         ok = MUTEX.synchronize do
           functions[:generate].call(handle, prompt, negative_prompt, width, height, steps, seed, path)
         end
@@ -60,8 +60,9 @@ module Elelem
       end
     end
 
-    def self.img2img(prompt:, input_path:, path:, negative_prompt: "", strength: 0.5, steps: 20, seed: 42, n_threads: nil)
-      with_context(n_threads: n_threads) do |model, handle|
+    def self.img2img(prompt:, input_path:, path:, negative_prompt: "", strength: 0.5, steps: 20, seed: 42,
+                     n_threads: nil)
+      with_context(n_threads: n_threads) do |_model, handle|
         ok = MUTEX.synchronize do
           functions[:img2img].call(handle, prompt, negative_prompt, input_path, strength, steps, seed, path)
         end
@@ -70,14 +71,14 @@ module Elelem
     end
 
     def self.video(prompt:, output_dir:, negative_prompt: "", steps: 20, width: 512, height: 512, seed: 42,
-                    video_frames: 16, fps: 8, n_threads: nil)
-      diffusion_model = ENV["ELELEM_SD_VIDEO_MODEL"]
+                   video_frames: 16, fps: 8, n_threads: nil)
+      diffusion_model = ENV.fetch("ELELEM_SD_VIDEO_MODEL", nil)
       return { ok: false, error: "ELELEM_SD_VIDEO_MODEL is not set" } unless diffusion_model
 
-      vae = ENV["ELELEM_SD_VIDEO_VAE"]
+      vae = ENV.fetch("ELELEM_SD_VIDEO_VAE", nil)
       return { ok: false, error: "ELELEM_SD_VIDEO_VAE is not set" } unless vae
 
-      t5xxl = ENV["ELELEM_SD_VIDEO_T5XXL"]
+      t5xxl = ENV.fetch("ELELEM_SD_VIDEO_T5XXL", nil)
       return { ok: false, error: "ELELEM_SD_VIDEO_T5XXL is not set" } unless t5xxl
 
       handle = video_context_for(diffusion_model, vae, t5xxl, n_threads: n_threads)
@@ -85,13 +86,14 @@ module Elelem
 
       FileUtils.mkdir_p(output_dir)
       ok = MUTEX.synchronize do
-        functions[:video].call(handle, prompt, negative_prompt, width, height, steps, seed, video_frames, fps, output_dir)
+        functions[:video].call(handle, prompt, negative_prompt, width, height, steps, seed, video_frames, fps,
+                               output_dir)
       end
       ok.zero? ? { ok: false, error: "video generation failed" } : { ok: true, path: output_dir }
     end
 
     def self.upscale(input_path:, path:, n_threads: nil)
-      esrgan = ENV["ELELEM_SD_ESRGAN_MODEL"]
+      esrgan = ENV.fetch("ELELEM_SD_ESRGAN_MODEL", nil)
       return { ok: false, error: "ELELEM_SD_ESRGAN_MODEL is not set" } unless esrgan
 
       ok = MUTEX.synchronize do
@@ -101,7 +103,7 @@ module Elelem
     end
 
     def self.with_context(n_threads:)
-      model = ENV["ELELEM_SD_IMAGE_MODEL"]
+      model = ENV.fetch("ELELEM_SD_IMAGE_MODEL", nil)
       return { ok: false, error: "ELELEM_SD_IMAGE_MODEL is not set" } unless model
 
       handle = context_for(model, n_threads: n_threads)
@@ -122,20 +124,25 @@ Elelem.configure do |config|
     end
 
     agent.toolbox.add("image",
-      description: "Generate an image from a text prompt using a local Stable Diffusion model, " \
-                    "or edit an existing image by passing input_path (img2img). " \
-                    "Lower steps/width/height trade image quality for speed.",
-      params: {
-        prompt: { type: "string" },
-        path: { type: "string" },
-        input_path: { type: "string", description: "existing image to edit; omit for a fresh generation" },
-        strength: { type: "number", description: "0.0-1.0, only used with input_path; higher changes more of the original" },
-        steps: { type: "integer", description: "sample steps, default 20; below ~15 often degrades quality" },
-        width: { type: "integer", description: "pixels, default 512, ignored when editing (uses input image size)" },
-        height: { type: "integer", description: "pixels, default 512, ignored when editing (uses input image size)" }
-      },
-      required: ["prompt", "path"]
-    ) do |args|
+                      description: "Generate an image from a text prompt using a local Stable Diffusion model, " \
+                                   "or edit an existing image by passing input_path (img2img). " \
+                                   "Lower steps/width/height trade image quality for speed.",
+                      params: {
+                        prompt: { type: "string" },
+                        path: { type: "string" },
+                        input_path: { type: "string",
+                                      description: "existing image to edit; omit for a fresh generation" },
+                        strength: { type: "number",
+                                    description: "0.0-1.0, only used with input_path; higher changes more of the " \
+                                                 "original" },
+                        steps: { type: "integer",
+                                 description: "sample steps, default 20; below ~15 often degrades quality" },
+                        width: { type: "integer",
+                                 description: "pixels, default 512, ignored when editing (uses input image size)" },
+                        height: { type: "integer",
+                                  description: "pixels, default 512, ignored when editing (uses input image size)" }
+                      },
+                      required: %w[prompt path]) do |args|
       if args["input_path"]
         Elelem::Diffusion.img2img(
           prompt: args["prompt"], input_path: args["input_path"], path: args["path"],
@@ -150,17 +157,16 @@ Elelem.configure do |config|
     end
 
     agent.toolbox.add("video",
-      description: "Generate a short video from a text prompt using a local Wan2.1/2.2 model. " \
-                    "Writes numbered PNG frames into output_dir. Slow: minutes per clip.",
-      params: {
-        prompt: { type: "string" },
-        output_dir: { type: "string" },
-        video_frames: { type: "integer", description: "default 16" },
-        fps: { type: "integer", description: "default 8" },
-        steps: { type: "integer", description: "sample steps, default 20" }
-      },
-      required: ["prompt", "output_dir"]
-    ) do |args|
+                      description: "Generate a short video from a text prompt using a local Wan2.1/2.2 model. " \
+                                   "Writes numbered PNG frames into output_dir. Slow: minutes per clip.",
+                      params: {
+                        prompt: { type: "string" },
+                        output_dir: { type: "string" },
+                        video_frames: { type: "integer", description: "default 16" },
+                        fps: { type: "integer", description: "default 8" },
+                        steps: { type: "integer", description: "sample steps, default 20" }
+                      },
+                      required: %w[prompt output_dir]) do |args|
       Elelem::Diffusion.video(
         prompt: args["prompt"], output_dir: args["output_dir"],
         video_frames: args["video_frames"] || 16, fps: args["fps"] || 8, steps: args["steps"] || 20
@@ -168,13 +174,12 @@ Elelem.configure do |config|
     end
 
     agent.toolbox.add("upscale",
-      description: "Upscale an existing image with a local ESRGAN model.",
-      params: {
-        input_path: { type: "string" },
-        path: { type: "string" }
-      },
-      required: ["input_path", "path"]
-    ) do |args|
+                      description: "Upscale an existing image with a local ESRGAN model.",
+                      params: {
+                        input_path: { type: "string" },
+                        path: { type: "string" }
+                      },
+                      required: %w[input_path path]) do |args|
       Elelem::Diffusion.upscale(input_path: args["input_path"], path: args["path"])
     end
   end
