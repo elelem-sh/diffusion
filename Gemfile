@@ -2,7 +2,7 @@
 
 source "https://rubygems.org"
 
-gemspec name: "elelem-image"
+gemspec name: "elelem-diffusion"
 
 gem "irb"
 gem "rake", "~> 13.0"

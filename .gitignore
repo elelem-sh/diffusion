@@ -6,6 +6,6 @@
 /pkg/
 /spec/reports/
 /tmp/
-/ext/elelem/image/build/
-/ext/elelem/image/native/
-/ext/elelem/image/Makefile
+/ext/elelem/diffusion/build/
+/ext/elelem/diffusion/native/
+/ext/elelem/diffusion/Makefile

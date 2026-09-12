@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative "../lib/elelem/image"
+require_relative "../lib/elelem/diffusion"
 
 RSpec.configure do |config|
   config.disable_monkey_patching!

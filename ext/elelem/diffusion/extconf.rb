@@ -6,7 +6,7 @@ EXT_DIR   = __dir__
 GEM_ROOT  = File.expand_path("../../..", EXT_DIR)
 VENDOR    = File.join(GEM_ROOT, "vendor", "stable-diffusion.cpp")
 BUILD_DIR = File.join(EXT_DIR, "build")
-NATIVE    = File.join(GEM_ROOT, "ext", "elelem", "image", "native")
+NATIVE    = File.join(GEM_ROOT, "ext", "elelem", "diffusion", "native")
 DARWIN = RbConfig::CONFIG["host_os"] =~ /darwin/
 
 class BuildError < StandardError; end
@@ -40,7 +40,7 @@ end
 
 def link_shim
   ext = DARWIN ? "dylib" : "so"
-  shim = File.join(NATIVE, "libelelem_image.#{ext}")
+  shim = File.join(NATIVE, "libelelem_diffusion.#{ext}")
   FileUtils.mkdir_p(NATIVE)
 
   sd_archive = find_archive("libstable-diffusion")
@@ -52,7 +52,7 @@ def link_shim
   visibility_flags = DARWIN ? [] : ["-Wl,--exclude-libs,ALL"]
   omp_flags = DARWIN ? [] : ["-fopenmp"]
   omp_link_flags = DARWIN ? [] : ["-lgomp"]
-  link_flags = DARWIN ? ["-Wl,-install_name,@rpath/libelelem_image.dylib"] : []
+  link_flags = DARWIN ? ["-Wl,-install_name,@rpath/libelelem_diffusion.dylib"] : []
 
   run(cxx, "-std=c++17", "-O2", "-Wall", "-Wextra", "-shared", "-fPIC", "-fvisibility=hidden", *omp_flags,
       "-I", File.join(VENDOR, "include"),
