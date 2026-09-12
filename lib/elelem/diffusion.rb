@@ -71,9 +71,15 @@ module Elelem
 
     def self.video(prompt:, output_dir:, negative_prompt: "", steps: 20, width: 512, height: 512, seed: 42,
                     video_frames: 16, fps: 8, n_threads: nil)
-      diffusion_model = ENV.fetch("ELELEM_SD_VIDEO_MODEL")
-      vae = ENV.fetch("ELELEM_SD_VIDEO_VAE")
-      t5xxl = ENV.fetch("ELELEM_SD_VIDEO_T5XXL")
+      diffusion_model = ENV["ELELEM_SD_VIDEO_MODEL"]
+      return { ok: false, error: "ELELEM_SD_VIDEO_MODEL is not set" } unless diffusion_model
+
+      vae = ENV["ELELEM_SD_VIDEO_VAE"]
+      return { ok: false, error: "ELELEM_SD_VIDEO_VAE is not set" } unless vae
+
+      t5xxl = ENV["ELELEM_SD_VIDEO_T5XXL"]
+      return { ok: false, error: "ELELEM_SD_VIDEO_T5XXL is not set" } unless t5xxl
+
       handle = video_context_for(diffusion_model, vae, t5xxl, n_threads: n_threads)
       return { ok: false, error: "failed to load video model at #{diffusion_model}" } if handle.null?
 
@@ -85,7 +91,9 @@ module Elelem
     end
 
     def self.upscale(input_path:, path:, n_threads: nil)
-      esrgan = ENV.fetch("ELELEM_SD_ESRGAN_MODEL")
+      esrgan = ENV["ELELEM_SD_ESRGAN_MODEL"]
+      return { ok: false, error: "ELELEM_SD_ESRGAN_MODEL is not set" } unless esrgan
+
       ok = MUTEX.synchronize do
         functions[:upscale].call(esrgan, input_path, n_threads || Etc.nprocessors, path)
       end
@@ -93,7 +101,9 @@ module Elelem
     end
 
     def self.with_context(n_threads:)
-      model = ENV.fetch("ELELEM_SD_IMAGE_MODEL")
+      model = ENV["ELELEM_SD_IMAGE_MODEL"]
+      return { ok: false, error: "ELELEM_SD_IMAGE_MODEL is not set" } unless model
+
       handle = context_for(model, n_threads: n_threads)
       return { ok: false, error: "failed to load model at #{model}" } if handle.null?
 

@@ -80,6 +80,14 @@ RSpec.describe Elelem::Diffusion do
 
       expect(close_fn).not_to have_received(:call)
     end
+
+    it "returns ok: false instead of raising when ELELEM_SD_IMAGE_MODEL is unset" do
+      ENV.delete("ELELEM_SD_IMAGE_MODEL")
+
+      result = described_class.generate(prompt: "a cat", path: "/tmp/cat.png")
+
+      expect(result).to eq(ok: false, error: "ELELEM_SD_IMAGE_MODEL is not set")
+    end
   end
 
   describe ".img2img" do
@@ -169,6 +177,30 @@ RSpec.describe Elelem::Diffusion do
       expect(result).to eq(ok: false, error: "failed to load video model at /models/wan.safetensors")
       expect(video_fn).not_to have_received(:call)
     end
+
+    it "returns ok: false instead of raising when ELELEM_SD_VIDEO_MODEL is unset" do
+      ENV.delete("ELELEM_SD_VIDEO_MODEL")
+
+      result = described_class.video(prompt: "a bird flying", output_dir: "/tmp/vid")
+
+      expect(result).to eq(ok: false, error: "ELELEM_SD_VIDEO_MODEL is not set")
+    end
+
+    it "returns ok: false instead of raising when ELELEM_SD_VIDEO_VAE is unset" do
+      ENV.delete("ELELEM_SD_VIDEO_VAE")
+
+      result = described_class.video(prompt: "a bird flying", output_dir: "/tmp/vid")
+
+      expect(result).to eq(ok: false, error: "ELELEM_SD_VIDEO_VAE is not set")
+    end
+
+    it "returns ok: false instead of raising when ELELEM_SD_VIDEO_T5XXL is unset" do
+      ENV.delete("ELELEM_SD_VIDEO_T5XXL")
+
+      result = described_class.video(prompt: "a bird flying", output_dir: "/tmp/vid")
+
+      expect(result).to eq(ok: false, error: "ELELEM_SD_VIDEO_T5XXL is not set")
+    end
   end
 
   describe ".upscale" do
@@ -202,6 +234,14 @@ RSpec.describe Elelem::Diffusion do
       result = described_class.upscale(input_path: "/tmp/in.png", path: "/tmp/out.png")
 
       expect(result).to eq(ok: false, error: "upscale failed")
+    end
+
+    it "returns ok: false instead of raising when ELELEM_SD_ESRGAN_MODEL is unset" do
+      ENV.delete("ELELEM_SD_ESRGAN_MODEL")
+
+      result = described_class.upscale(input_path: "/tmp/in.png", path: "/tmp/out.png")
+
+      expect(result).to eq(ok: false, error: "ELELEM_SD_ESRGAN_MODEL is not set")
     end
   end
 
