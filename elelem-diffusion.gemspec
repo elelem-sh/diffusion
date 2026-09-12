@@ -16,13 +16,14 @@ Gem::Specification.new do |spec|
   spec.metadata["allowed_push_host"] = "https://rubygems.org"
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = spec.homepage
+  spec.metadata["rubygems_mfa_required"] = "true"
 
   spec.files = [
     "LICENSE.txt",
     "lib/elelem/diffusion.rb",
     "lib/elelem/diffusion/version.rb",
     "ext/elelem/diffusion/elelem.cpp",
-    "ext/elelem/diffusion/extconf.rb",
+    "ext/elelem/diffusion/extconf.rb"
   ]
   # Only what extconf.rb's cmake build (SD_BUILD_EXAMPLES/WEBP/WEBM all OFF)
   # actually needs to configure and compile. Applies to both stable-diffusion.cpp's
