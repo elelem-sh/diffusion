@@ -1,0 +1,11 @@
+/.bundle/
+/.yardoc
+/_yardoc/
+/coverage/
+/doc/
+/pkg/
+/spec/reports/
+/tmp/
+/ext/elelem/image/build/
+/ext/elelem/image/native/
+/ext/elelem/image/Makefile
