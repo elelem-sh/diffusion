@@ -64,6 +64,25 @@ extern "C" {
     return handle;
   }
 
+  EL_API void *el_sd_open_video(const char *diffusion_model_path, const char *vae_path,
+                           const char *t5xxl_path, int n_threads) {
+    sd_ctx_params_t params;
+    sd_ctx_params_init(&params);
+    params.diffusion_model_path = diffusion_model_path;
+    params.vae_path = vae_path;
+    params.t5xxl_path = t5xxl_path;
+    params.n_threads = n_threads;
+
+    sd_set_log_callback(el_sd_log_cb, nullptr);
+    sd_set_progress_callback(el_sd_progress_cb, nullptr);
+
+    sd_ctx_t *ctx = new_sd_ctx(&params);
+    if (!ctx) return nullptr;
+
+    el_sd_handle *handle = new el_sd_handle{ctx};
+    return handle;
+  }
+
   EL_API bool el_sd_generate(void *handle_ptr, const char *prompt, const char *negative_prompt,
                        int width, int height, int steps, int64_t seed, const char *output_path) {
     el_sd_handle *handle = static_cast<el_sd_handle *>(handle_ptr);

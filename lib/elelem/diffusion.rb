@@ -28,6 +28,7 @@ module Elelem
         lib = Fiddle.dlopen(SHIM)
         {
           open: Fiddle::Function.new(lib["el_sd_open"], [V, I], V),
+          open_video: Fiddle::Function.new(lib["el_sd_open_video"], [V, V, V, I], V),
           generate: Fiddle::Function.new(lib["el_sd_generate"], [V, V, V, I, I, I, L, V], I, need_gvl: false),
           img2img: Fiddle::Function.new(lib["el_sd_img2img"], [V, V, V, V, F, I, L, V], I, need_gvl: false),
           video: Fiddle::Function.new(lib["el_sd_video"], [V, V, V, I, I, I, L, I, I, V], I, need_gvl: false),
@@ -40,6 +41,13 @@ module Elelem
     def self.context_for(model, n_threads: nil)
       MUTEX.synchronize do
         CONTEXTS[model] ||= functions[:open].call(model, n_threads || Etc.nprocessors)
+      end
+    end
+
+    def self.video_context_for(diffusion_model, vae, t5xxl, n_threads: nil)
+      key = [diffusion_model, vae, t5xxl]
+      MUTEX.synchronize do
+        CONTEXTS[key] ||= functions[:open_video].call(diffusion_model, vae, t5xxl, n_threads || Etc.nprocessors)
       end
     end
 
@@ -63,13 +71,17 @@ module Elelem
 
     def self.video(prompt:, output_dir:, negative_prompt: "", steps: 20, width: 512, height: 512, seed: 42,
                     video_frames: 16, fps: 8, n_threads: nil)
-      with_context(n_threads: n_threads) do |model, handle|
-        FileUtils.mkdir_p(output_dir)
-        ok = MUTEX.synchronize do
-          functions[:video].call(handle, prompt, negative_prompt, width, height, steps, seed, video_frames, fps, output_dir)
-        end
-        ok.zero? ? { ok: false, error: "video generation failed" } : { ok: true, path: output_dir }
+      diffusion_model = ENV.fetch("ELELEM_SD_VIDEO_MODEL")
+      vae = ENV.fetch("ELELEM_SD_VIDEO_VAE")
+      t5xxl = ENV.fetch("ELELEM_SD_VIDEO_T5XXL")
+      handle = video_context_for(diffusion_model, vae, t5xxl, n_threads: n_threads)
+      return { ok: false, error: "failed to load video model at #{diffusion_model}" } if handle.null?
+
+      FileUtils.mkdir_p(output_dir)
+      ok = MUTEX.synchronize do
+        functions[:video].call(handle, prompt, negative_prompt, width, height, steps, seed, video_frames, fps, output_dir)
       end
+      ok.zero? ? { ok: false, error: "video generation failed" } : { ok: true, path: output_dir }
     end
 
     def self.upscale(input_path:, path:, n_threads: nil)

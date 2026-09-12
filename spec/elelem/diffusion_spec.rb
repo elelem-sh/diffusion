@@ -14,6 +14,7 @@ RSpec.describe Elelem::Diffusion do
   end
 
   let(:open_fn) { instance_double(Fiddle::Function, call: handle) }
+  let(:open_video_fn) { instance_double(Fiddle::Function, call: handle) }
   let(:generate_fn) { instance_double(Fiddle::Function) }
   let(:img2img_fn) { instance_double(Fiddle::Function) }
   let(:video_fn) { instance_double(Fiddle::Function) }
@@ -23,7 +24,7 @@ RSpec.describe Elelem::Diffusion do
 
   before do
     allow(described_class).to receive(:functions).and_return(
-      open: open_fn, generate: generate_fn, img2img: img2img_fn,
+      open: open_fn, open_video: open_video_fn, generate: generate_fn, img2img: img2img_fn,
       video: video_fn, upscale: upscale_fn, close: close_fn
     )
   end
@@ -108,6 +109,18 @@ RSpec.describe Elelem::Diffusion do
   end
 
   describe ".video" do
+    around do |example|
+      original = { model: ENV["ELELEM_SD_VIDEO_MODEL"], vae: ENV["ELELEM_SD_VIDEO_VAE"], t5xxl: ENV["ELELEM_SD_VIDEO_T5XXL"] }
+      ENV["ELELEM_SD_VIDEO_MODEL"] = "/models/wan.safetensors"
+      ENV["ELELEM_SD_VIDEO_VAE"] = "/models/wan_vae.safetensors"
+      ENV["ELELEM_SD_VIDEO_T5XXL"] = "/models/t5xxl.gguf"
+      example.run
+    ensure
+      ENV["ELELEM_SD_VIDEO_MODEL"] = original[:model]
+      ENV["ELELEM_SD_VIDEO_VAE"] = original[:vae]
+      ENV["ELELEM_SD_VIDEO_T5XXL"] = original[:t5xxl]
+    end
+
     it "creates the output directory and returns ok on success" do
       allow(video_fn).to receive(:call).and_return(1)
       allow(FileUtils).to receive(:mkdir_p)
@@ -116,6 +129,17 @@ RSpec.describe Elelem::Diffusion do
 
       expect(FileUtils).to have_received(:mkdir_p).with("/tmp/vid")
       expect(result).to eq(ok: true, path: "/tmp/vid")
+    end
+
+    it "opens the video context with the diffusion/vae/t5xxl paths" do
+      allow(video_fn).to receive(:call).and_return(1)
+      allow(FileUtils).to receive(:mkdir_p)
+
+      described_class.video(prompt: "a bird flying", output_dir: "/tmp/vid")
+
+      expect(open_video_fn).to have_received(:call).with(
+        "/models/wan.safetensors", "/models/wan_vae.safetensors", "/models/t5xxl.gguf", Etc.nprocessors
+      )
     end
 
     it "defaults video_frames/fps/steps and passes them to the shim" do
@@ -134,6 +158,16 @@ RSpec.describe Elelem::Diffusion do
       result = described_class.video(prompt: "a bird flying", output_dir: "/tmp/vid")
 
       expect(result).to eq(ok: false, error: "video generation failed")
+    end
+
+    it "returns ok: false without generating when the video model fails to load" do
+      allow(open_video_fn).to receive(:call).and_return(instance_double(Fiddle::Pointer, null?: true))
+      allow(video_fn).to receive(:call)
+
+      result = described_class.video(prompt: "a bird flying", output_dir: "/tmp/vid")
+
+      expect(result).to eq(ok: false, error: "failed to load video model at /models/wan.safetensors")
+      expect(video_fn).not_to have_received(:call)
     end
   end
 
