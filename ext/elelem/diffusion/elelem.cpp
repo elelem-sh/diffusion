@@ -48,10 +48,11 @@ extern "C" {
     return true;
   }
 
-  EL_API void *el_sd_open(const char *model_path, int n_threads) {
+  EL_API void *el_sd_open(const char *model_path, const char *vae_path, int n_threads) {
     sd_ctx_params_t params;
     sd_ctx_params_init(&params);
     params.model_path = model_path;
+    params.vae_path = vae_path;
     params.n_threads = n_threads;
 
     sd_set_log_callback(el_sd_log_cb, nullptr);

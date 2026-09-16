@@ -27,7 +27,7 @@ module Elelem
       @functions ||= begin
         lib = Fiddle.dlopen(SHIM)
         {
-          open: Fiddle::Function.new(lib["el_sd_open"], [V, I], V),
+          open: Fiddle::Function.new(lib["el_sd_open"], [V, V, I], V),
           open_video: Fiddle::Function.new(lib["el_sd_open_video"], [V, V, V, I], V),
           generate: Fiddle::Function.new(lib["el_sd_generate"], [V, V, V, I, I, I, L, V], I, need_gvl: false),
           img2img: Fiddle::Function.new(lib["el_sd_img2img"], [V, V, V, V, F, I, L, V], I, need_gvl: false),
@@ -39,8 +39,9 @@ module Elelem
     end
 
     def self.context_for(model, n_threads: nil)
+      vae = ENV.fetch("ELELEM_SD_VAE_MODEL", "")
       MUTEX.synchronize do
-        CONTEXTS[model] ||= functions[:open].call(model, n_threads || Etc.nprocessors)
+        CONTEXTS[[model, vae]] ||= functions[:open].call(model, vae, n_threads || Etc.nprocessors)
       end
     end
 
