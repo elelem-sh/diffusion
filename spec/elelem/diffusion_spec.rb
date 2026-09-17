@@ -56,12 +56,12 @@ RSpec.describe Elelem::Diffusion do
       expect(generate_fn).not_to have_received(:call)
     end
 
-    it "defaults steps/width/height/negative_prompt/seed and passes them to the shim" do
+    it "defaults steps/width/height/negative_prompt/seed/cfg_scale and passes them to the shim" do
       allow(generate_fn).to receive(:call).and_return(1)
 
       described_class.generate(prompt: "a cat", path: "/tmp/cat.png")
 
-      expect(generate_fn).to have_received(:call).with(handle, "a cat", "", 512, 512, 20, 42, "/tmp/cat.png")
+      expect(generate_fn).to have_received(:call).with(handle, "a cat", "", 512, 512, 20, 42, 0.0, "/tmp/cat.png")
     end
 
     it "reuses the same context across calls for the same model" do

@@ -29,7 +29,7 @@ module Elelem
         {
           open: Fiddle::Function.new(lib["el_sd_open"], [V, V, I], V),
           open_video: Fiddle::Function.new(lib["el_sd_open_video"], [V, V, V, I], V),
-          generate: Fiddle::Function.new(lib["el_sd_generate"], [V, V, V, I, I, I, L, V], I, need_gvl: false),
+          generate: Fiddle::Function.new(lib["el_sd_generate"], [V, V, V, I, I, I, L, F, V], I, need_gvl: false),
           img2img: Fiddle::Function.new(lib["el_sd_img2img"], [V, V, V, V, F, I, L, V], I, need_gvl: false),
           video: Fiddle::Function.new(lib["el_sd_video"], [V, V, V, I, I, I, L, I, I, V], I, need_gvl: false),
           upscale: Fiddle::Function.new(lib["el_sd_upscale"], [V, V, I, V], I, need_gvl: false),
@@ -52,10 +52,11 @@ module Elelem
       end
     end
 
-    def self.generate(prompt:, path:, negative_prompt: "", steps: 20, width: 512, height: 512, seed: 42, n_threads: nil)
+    def self.generate(prompt:, path:, negative_prompt: "", steps: 20, width: 512, height: 512, seed: 42,
+                      cfg_scale: 0.0, n_threads: nil)
       with_context(n_threads: n_threads) do |_model, handle|
         ok = MUTEX.synchronize do
-          functions[:generate].call(handle, prompt, negative_prompt, width, height, steps, seed, path)
+          functions[:generate].call(handle, prompt, negative_prompt, width, height, steps, seed, cfg_scale, path)
         end
         ok.zero? ? { ok: false, error: "generation failed" } : { ok: true, path: path }
       end
@@ -141,7 +142,10 @@ Elelem.configure do |config|
                         width: { type: "integer",
                                  description: "pixels, default 512, ignored when editing (uses input image size)" },
                         height: { type: "integer",
-                                  description: "pixels, default 512, ignored when editing (uses input image size)" }
+                                  description: "pixels, default 512, ignored when editing (uses input image size)" },
+                        cfg_scale: { type: "number",
+                                     description: "prompt adherence, default 7.0; lower (~4-5) reduces " \
+                                                  "over/under-saturation swings, higher increases prompt adherence" }
                       },
                       required: %w[prompt path]) do |args|
       if args["input_path"]
@@ -152,7 +156,8 @@ Elelem.configure do |config|
       else
         Elelem::Diffusion.generate(
           prompt: args["prompt"], path: args["path"],
-          steps: args["steps"] || 20, width: args["width"] || 512, height: args["height"] || 512
+          steps: args["steps"] || 20, width: args["width"] || 512, height: args["height"] || 512,
+          cfg_scale: args["cfg_scale"] || 0.0
         )
       end
     end

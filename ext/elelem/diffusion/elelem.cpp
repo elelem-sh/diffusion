@@ -85,7 +85,8 @@ extern "C" {
   }
 
   EL_API bool el_sd_generate(void *handle_ptr, const char *prompt, const char *negative_prompt,
-                       int width, int height, int steps, int64_t seed, const char *output_path) {
+                       int width, int height, int steps, int64_t seed, float cfg_scale,
+                       const char *output_path) {
     el_sd_handle *handle = static_cast<el_sd_handle *>(handle_ptr);
     if (!handle || !handle->ctx) return false;
 
@@ -96,6 +97,7 @@ extern "C" {
     params.width = width;
     params.height = height;
     params.sample_params.sample_steps = steps;
+    if (cfg_scale > 0) params.sample_params.guidance.txt_cfg = cfg_scale;
     params.seed = seed;
     params.batch_count = 1;
 
