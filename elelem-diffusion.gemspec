@@ -35,6 +35,6 @@ Gem::Specification.new do |spec|
   spec.extensions = ["ext/elelem/diffusion/extconf.rb"]
   spec.require_paths = ["lib"]
 
-  spec.add_dependency "elelem", "~> 0.12"
+  spec.add_dependency "elelem", ">= 0.12", "< 1"
   spec.add_dependency "fiddle", "~> 1.1"
 end

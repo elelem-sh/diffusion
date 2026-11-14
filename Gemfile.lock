@@ -2,7 +2,7 @@ PATH
   remote: .
   specs:
     elelem-diffusion (0.1.0)
-      elelem (~> 0.12)
+      elelem (>= 0.12, < 1)
       fiddle (~> 1.1)
 
 GEM
