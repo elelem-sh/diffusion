@@ -10,12 +10,12 @@ Gem::Specification.new do |spec|
 
   spec.summary = "Local diffusion-model tools for elelem."
   spec.description = "Adds image, img2img, video, and upscale tools backed by an embedded stable-diffusion.cpp."
-  spec.homepage = "https://src.mokhan.ca/elelem/diffusion"
+  spec.homepage = "https://elelem.sh"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 4.0.0"
   spec.metadata["allowed_push_host"] = "https://rubygems.org"
   spec.metadata["homepage_uri"] = spec.homepage
-  spec.metadata["source_code_uri"] = spec.homepage
+  spec.metadata["source_code_uri"] = "https://github.com/elelem-sh/diffusion"
   spec.metadata["rubygems_mfa_required"] = "true"
 
   spec.files = [
