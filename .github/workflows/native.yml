@@ -1,0 +1,50 @@
+name: Native
+
+on:
+  push:
+    branches-ignore: [main]
+    paths:
+      - ".github/workflows/native.yml"
+      - ".gitmodules"
+      - "*.gemspec"
+      - "ext/**"
+      - "lib/**"
+      - "vendor/**"
+  workflow_call:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  native:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, backend: cpu, force: cpu }
+          - { os: macos-latest, backend: metal }
+          - { os: macos-15-intel, backend: metal }
+    env:
+      BACKEND: ${{ matrix.backend }}
+      ELELEM_SD_BACKEND: ${{ matrix.force }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          submodules: recursive
+      - uses: ruby/setup-ruby@3ff19f5e2baf30647122352b96108b1fbe250c64 # v1.299.0
+        with:
+          ruby-version: "4.0"
+      - run: gem build elelem-diffusion.gemspec --output elelem-diffusion.gem
+      - run: gem install elelem-diffusion.gem
+      - working-directory: ${{ runner.temp }}
+        run: |
+          ruby -relelem/diffusion -e '
+            backend = File.read(File.join(Elelem::Diffusion::NATIVE, "backend"))
+            abort "built #{backend}, expected #{ENV.fetch("BACKEND")}" unless backend == ENV.fetch("BACKEND")
+            puts backend, Elelem::Diffusion.functions.keys
+          '
