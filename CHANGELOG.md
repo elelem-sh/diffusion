@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.2.0](https://github.com/elelem-sh/diffusion/compare/v0.1.0...v0.2.0) (2026-11-24)
+
+
+### Features
+
+* auto-detect GPU backend for stable-diffusion.cpp build ([a9b0da8](https://github.com/elelem-sh/diffusion/commit/a9b0da870bae7380654c53494b3ce363335c0f40))
+* expose cfg_scale on image generation ([1517acb](https://github.com/elelem-sh/diffusion/commit/1517acba01d1853839f980563c0a6a07f2abb51e))
+* expose vae_path on the image generation context ([37ebfa5](https://github.com/elelem-sh/diffusion/commit/37ebfa51cebcebc0b1395d84bfcac743c8b16810))
+* use vulkan on intel macs with a discrete gpu ([e668982](https://github.com/elelem-sh/diffusion/commit/e6689826db9d1f50e93f9d491049e59fe0bd14a0))
+
+
+### Bug Fixes
+
+* build for the host cpu when installed as a gem ([d3def8c](https://github.com/elelem-sh/diffusion/commit/d3def8c13d27f6f02a9716774bf453c18d477524))
+* link apple frameworks on macos ([85cd535](https://github.com/elelem-sh/diffusion/commit/85cd535c6481f011255aac58313b4fd7e02621a5))
+
 ## 0.1.0 (2026-11-17)
 
 
