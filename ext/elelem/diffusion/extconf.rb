@@ -81,6 +81,7 @@ def configure_and_build(backend)
   run(
     "cmake", "-S", VENDOR, "-B", BUILD_DIR,
     "-DCMAKE_BUILD_TYPE=Release",
+    "-DGGML_NATIVE=ON",
     "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
     "-DSD_BUILD_SHARED_LIBS=OFF",
     "-DSD_BUILD_EXAMPLES=OFF",
