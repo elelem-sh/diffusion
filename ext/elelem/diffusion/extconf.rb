@@ -47,7 +47,7 @@ end
 
 def gpu_flags(backend)
   {
-    "cpu" => [],
+    "cpu" => DARWIN ? ["-DGGML_METAL=OFF"] : [],
     "vulkan" => ["-DSD_VULKAN=ON"],
     "cuda" => ["-DSD_CUDA=ON"],
     "hip" => ["-DSD_HIPBLAS=ON", "-DCMAKE_C_COMPILER=hipcc", "-DCMAKE_CXX_COMPILER=hipcc",
@@ -122,9 +122,10 @@ def link_shim(backend)
   backend_link_flags = {
     "hip" => ["-lamdhip64", "-lhipblas", "-lrocblas"],
     "vulkan" => ["-lvulkan"],
-    "cuda" => ["-lcudart", "-lcublas"]
+    "cuda" => ["-lcudart", "-lcublas"],
+    "metal" => %w[-framework Foundation -framework Metal]
   }.fetch(backend, [])
-  link_flags = DARWIN ? ["-Wl,-install_name,@rpath/libelelem_diffusion.dylib"] : []
+  link_flags = DARWIN ? %w[-Wl,-install_name,@rpath/libelelem_diffusion.dylib -framework Accelerate] : []
 
   run(cxx, "-std=c++17", "-O2", "-Wall", "-Wextra", "-shared", "-fPIC", "-fvisibility=hidden", *omp_flags,
       "-I", File.join(VENDOR, "include"),
