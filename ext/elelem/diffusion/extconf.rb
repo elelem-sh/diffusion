@@ -41,13 +41,17 @@ def vulkan_loader?
   return true if which("vulkaninfo")
 
   %w[/usr/lib64 /usr/lib /usr/local/lib /lib64 /lib].any? do |dir|
-    !Dir.glob(File.join(dir, "libvulkan.so*")).empty?
+    !Dir.glob(File.join(dir, "libvulkan{.so*,*.dylib}")).empty?
   end
+end
+
+def discrete_gpu?
+  `/usr/sbin/system_profiler -json SPDisplaysDataType 2>/dev/null`.include?("spdisplays_pcie_device")
 end
 
 def gpu_flags(backend)
   {
-    "cpu" => DARWIN ? ["-DGGML_METAL=OFF"] : [],
+    "cpu" => [],
     "vulkan" => ["-DSD_VULKAN=ON"],
     "cuda" => ["-DSD_CUDA=ON"],
     "hip" => ["-DSD_HIPBLAS=ON", "-DCMAKE_C_COMPILER=hipcc", "-DCMAKE_CXX_COMPILER=hipcc",
@@ -63,9 +67,9 @@ def detect_backend
   end
   return forced unless forced.empty? || forced == "auto"
 
-  return "metal" if DARWIN
+  return "metal" if DARWIN && RbConfig::CONFIG["host_cpu"] =~ /arm|aarch/
   return "cuda" if which("nvcc")
-  return "vulkan" if which("glslc") && vulkan_loader?
+  return "vulkan" if which("glslc") && vulkan_loader? && (!DARWIN || discrete_gpu?)
   return "hip" if hip_available?
 
   "cpu"
@@ -73,6 +77,7 @@ end
 
 def configure_and_build(backend)
   flags = gpu_flags(backend)
+  flags += ["-DGGML_METAL=OFF"] if DARWIN && backend != "metal"
   run(
     "cmake", "-S", VENDOR, "-B", BUILD_DIR,
     "-DCMAKE_BUILD_TYPE=Release",

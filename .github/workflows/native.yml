@@ -18,7 +18,7 @@ permissions: {}
 jobs:
   native:
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    timeout-minutes: 90
     permissions:
       contents: read
     strategy:
@@ -27,7 +27,8 @@ jobs:
         include:
           - { os: ubuntu-latest, backend: cpu, force: cpu }
           - { os: macos-latest, backend: metal }
-          - { os: macos-15-intel, backend: metal }
+          - { os: macos-15-intel, backend: cpu, force: cpu }
+          - { os: macos-15-intel, backend: vulkan, force: vulkan, brew: shaderc spirv-headers vulkan-headers vulkan-loader }
     env:
       BACKEND: ${{ matrix.backend }}
       ELELEM_SD_BACKEND: ${{ matrix.force }}
@@ -39,6 +40,8 @@ jobs:
       - uses: ruby/setup-ruby@3ff19f5e2baf30647122352b96108b1fbe250c64 # v1.299.0
         with:
           ruby-version: "4.0"
+      - if: matrix.brew
+        run: brew install ${{ matrix.brew }}
       - run: gem build elelem-diffusion.gemspec --output elelem-diffusion.gem
       - run: gem install elelem-diffusion.gem
       - working-directory: ${{ runner.temp }}
