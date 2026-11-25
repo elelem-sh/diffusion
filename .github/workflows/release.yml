@@ -66,6 +66,7 @@ jobs:
         with:
           ruby-version: "4.0"
           bundler-cache: true
+      - run: git config --global fetch.recurseSubmodules false
       - uses: rubygems/release-gem@7f9650160c1a4e7989fdc9855807bdbd421d8b6b # v1.4.1
         with:
           await-release: false
