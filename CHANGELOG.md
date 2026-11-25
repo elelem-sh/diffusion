@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1](https://github.com/elelem-sh/diffusion/compare/v0.2.0...v0.2.1) (2026-11-25)
+
+
+### Bug Fixes
+
+* port to the stable-diffusion.cpp options api ([c9d59cb](https://github.com/elelem-sh/diffusion/commit/c9d59cb4806bc55d5a110c5a0f35cd887e12b753))
+* return an error when the output path is nil ([27ab48a](https://github.com/elelem-sh/diffusion/commit/27ab48a996096e73c01450368cf34a4d4c106e39))
+
 ## [0.2.0](https://github.com/elelem-sh/diffusion/compare/v0.1.0...v0.2.0) (2026-11-24)
 
 
