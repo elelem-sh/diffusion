@@ -79,13 +79,13 @@ namespace {
       sd_tensor_create(SD_TENSOR_U8, 3, shape, pixels.get(), static_cast<size_t>(width) * height * 3));
   }
 
-  bool write_png(const sd_tensor_t *image, const std::string &path) {
-    if (!image) return false;
+  bool write_png(const sd_tensor_t *image, const char *path) {
+    if (!image || !path) return false;
 
     int channels = static_cast<int>(sd_tensor_dim(image, 0));
     int width = static_cast<int>(sd_tensor_dim(image, 1));
     int height = static_cast<int>(sd_tensor_dim(image, 2));
-    return stbi_write_png(path.c_str(), width, height, channels, sd_tensor_data(image), width * channels) != 0;
+    return stbi_write_png(path, width, height, channels, sd_tensor_data(image), width * channels) != 0;
   }
 
   template <typename Subject>
@@ -203,7 +203,7 @@ extern "C" {
     for (size_t i = 0; i < frames; i++) {
       char name[32];
       snprintf(name, sizeof(name), "/frame-%04zu.png", i);
-      written = write_png(sd_result_get_image(result.get(), i), output_dir + std::string(name)) && written;
+      written = write_png(sd_result_get_image(result.get(), i), (output_dir + std::string(name)).c_str()) && written;
     }
     return written;
   }
