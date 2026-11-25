@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "etc"
 require "fileutils"
 
 EXT_DIR   = __dir__
@@ -53,9 +54,10 @@ def gpu_flags(backend)
   {
     "cpu" => [],
     "vulkan" => ["-DSD_VULKAN=ON"],
-    "cuda" => ["-DSD_CUDA=ON"],
+    "cuda" => ["-DSD_CUDA=ON", "-DSD_CUDA_CUTLASS_PATH="],
     "hip" => ["-DSD_HIPBLAS=ON", "-DCMAKE_C_COMPILER=hipcc", "-DCMAKE_CXX_COMPILER=hipcc",
-              "-DAMDGPU_TARGETS=#{ENV.fetch("ELELEM_HIP_ARCH") { hip_gfx_target || "gfx1100" }}"],
+              "-DAMDGPU_TARGETS=#{ENV.fetch("ELELEM_HIP_ARCH") { hip_gfx_target || "gfx1100" }}",
+              "-DCMAKE_DISABLE_FIND_PACKAGE_hipblaslt=ON"],
     "metal" => ["-DSD_METAL=ON"]
   }.fetch(backend) { abort "elelem: unknown backend #{backend.inspect}" }
 end
@@ -89,13 +91,14 @@ def configure_and_build(backend)
     "-DSD_WEBM=OFF",
     *flags
   )
-  run("cmake", "--build", BUILD_DIR, "--target", "stable-diffusion", "--parallel")
+  run("cmake", "--build", BUILD_DIR, "--target", "stable-diffusion",
+      "--parallel", ENV.fetch("CMAKE_BUILD_PARALLEL_LEVEL") { Etc.nprocessors.to_s })
   File.write(STAMP, backend)
 end
 
 unless File.exist?(File.join(VENDOR, "CMakeLists.txt"))
   abort "elelem: vendored stable-diffusion.cpp missing at #{VENDOR}\n        " \
-        "run: git submodule update --init --recursive"
+        "run: git submodule update --init && git -C vendor/stable-diffusion.cpp submodule update --init ggml"
 end
 
 backend = detect_backend
@@ -128,7 +131,7 @@ def link_shim(backend)
   backend_link_flags = {
     "hip" => ["-lamdhip64", "-lhipblas", "-lrocblas"],
     "vulkan" => ["-lvulkan"],
-    "cuda" => ["-lcudart", "-lcublas"],
+    "cuda" => ["-lcudart", "-lcublas", "-lcublasLt", "-lcuda"],
     "metal" => %w[-framework Foundation -framework Metal]
   }.fetch(backend, [])
   link_flags = DARWIN ? %w[-Wl,-install_name,@rpath/libelelem_diffusion.dylib -framework Accelerate] : []
@@ -136,6 +139,7 @@ def link_shim(backend)
   run(cxx, "-std=c++17", "-O2", "-Wall", "-Wextra", "-shared", "-fPIC", "-fvisibility=hidden", *omp_flags,
       "-I", File.join(VENDOR, "include"),
       "-I", File.join(VENDOR, "thirdparty"),
+      "-I", File.join(VENDOR, "ggml", "include"),
       File.join(EXT_DIR, "elelem.cpp"),
       "-o", shim,
       *archive_flags,

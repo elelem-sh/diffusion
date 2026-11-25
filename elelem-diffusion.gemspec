@@ -25,10 +25,7 @@ Gem::Specification.new do |spec|
     "ext/elelem/diffusion/elelem.cpp",
     "ext/elelem/diffusion/extconf.rb"
   ]
-  # Only what extconf.rb's cmake build (SD_BUILD_EXAMPLES/WEBP/WEBM all OFF)
-  # actually needs to configure and compile. Applies to both stable-diffusion.cpp's
-  # own tree and its nested ggml submodule.
-  vendor_exclude = %r{/(examples|docs|tests|ci|assets|\.github|thirdparty/libwebp|thirdparty/libwebm)/}
+  vendor_exclude = %r{/(examples|docs|tests|ci|assets|\.github|thirdparty/(libwebp|libwebm|cutlass))/}
   spec.files += Dir["vendor/stable-diffusion.cpp/**/*"].select do |path|
     File.file?(path) && path !~ vendor_exclude
   end
