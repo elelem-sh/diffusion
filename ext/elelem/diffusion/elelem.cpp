@@ -1,3 +1,4 @@
+#include "ggml.h"
 #include "stable-diffusion.h"
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -9,212 +10,205 @@
 #include "stb_image_write.h"
 
 #include <cstdio>
-#include <cstring>
+#include <memory>
 #include <string>
 
 #define EL_API __attribute__((visibility("default")))
 
-extern "C" {
-  struct el_sd_handle {
-    sd_ctx_t *ctx;
+namespace {
+  struct Free {
+    void operator()(sd_opt_t *options) const { sd_opt_free(options); }
+    void operator()(sd_ctx_t *context) const { sd_ctx_free(context); }
+    void operator()(sd_upscaler_t *upscaler) const { sd_upscaler_free(upscaler); }
+    void operator()(sd_result_t *result) const { sd_result_free(result); }
+    void operator()(sd_tensor_t *tensor) const { sd_tensor_free(tensor); }
+    void operator()(stbi_uc *pixels) const { stbi_image_free(pixels); }
   };
 
-  static void el_sd_log_cb(enum sd_log_level_t, const char *, void *) {
-    // sd.cpp's INFO/progress logging goes straight to this process's stderr
-    // with no subprocess boundary to contain it; drop it here. Callers that
-    // want it can wire sd_set_log_callback themselves.
+  template <typename T>
+  using Owned = std::unique_ptr<T, Free>;
+
+  class Options {
+  public:
+    explicit Options(sd_opt_t *options) : options(options), ok(options != nullptr) {}
+
+    Options &text(const char *key, const char *value) {
+      return value && *value ? check(sd_opt_set_string(options.get(), key, value)) : *this;
+    }
+
+    Options &integer(const char *key, int64_t value) {
+      return check(sd_opt_set_int(options.get(), key, value));
+    }
+
+    Options &number(const char *key, double value) {
+      return check(sd_opt_set_float(options.get(), key, value));
+    }
+
+    Options &image(const char *key, const sd_tensor_t *value) {
+      return check(sd_opt_set_tensor(options.get(), key, value));
+    }
+
+    const sd_opt_t *get() const { return options.get(); }
+    explicit operator bool() const { return ok; }
+
+  private:
+    Options &check(sd_status_t status) {
+      ok = ok && status == SD_STATUS_OK;
+      return *this;
+    }
+
+    Owned<sd_opt_t> options;
+    bool ok;
+  };
+
+  void quiet(int, int, float, void *) {}
+  void quiet(enum ggml_log_level, const char *, void *) {}
+
+  void silence() {
+    ggml_log_set(quiet, nullptr);
+    sd_set_progress_callback(quiet, nullptr);
   }
 
-  static void el_sd_progress_cb(int, int, float, void *) {
-    // Same rationale as el_sd_log_cb: no subprocess boundary to contain the
-    // progress bar sd.cpp writes straight to stderr.
-  }
-
-  static bool el_sd_write_png(sd_image_t image, const char *output_path) {
-    int written = stbi_write_png(output_path, image.width, image.height,
-                                  image.channel, image.data,
-                                  image.width * image.channel);
-    return written != 0;
-  }
-
-  static bool el_sd_read_png(const char *input_path, sd_image_t *out) {
+  Owned<sd_tensor_t> read_png(const char *path) {
     int width, height, channels;
-    unsigned char *data = stbi_load(input_path, &width, &height, &channels, 3);
-    if (!data) return false;
-    out->width = static_cast<uint32_t>(width);
-    out->height = static_cast<uint32_t>(height);
-    out->channel = 3;
-    out->data = data;
-    return true;
+    Owned<stbi_uc> pixels(stbi_load(path, &width, &height, &channels, 3));
+    if (!pixels) return nullptr;
+
+    const int64_t shape[] = {3, width, height};
+    return Owned<sd_tensor_t>(
+      sd_tensor_create(SD_TENSOR_U8, 3, shape, pixels.get(), static_cast<size_t>(width) * height * 3));
   }
 
+  bool write_png(const sd_tensor_t *image, const std::string &path) {
+    if (!image) return false;
+
+    int channels = static_cast<int>(sd_tensor_dim(image, 0));
+    int width = static_cast<int>(sd_tensor_dim(image, 1));
+    int height = static_cast<int>(sd_tensor_dim(image, 2));
+    return stbi_write_png(path.c_str(), width, height, channels, sd_tensor_data(image), width * channels) != 0;
+  }
+
+  template <typename Subject>
+  using Operation = sd_status_t (*)(Subject *, const sd_opt_t *, sd_result_t **);
+
+  template <typename Subject>
+  Owned<sd_result_t> run(Operation<Subject> operation, Subject *subject, const Options &options) {
+    sd_result_t *result = nullptr;
+    if (!options || operation(subject, options.get(), &result) != SD_STATUS_OK) return nullptr;
+
+    return Owned<sd_result_t>(result);
+  }
+
+  void *open(const Options &options, bool (*supported)(const sd_ctx_t *)) {
+    silence();
+
+    sd_ctx_t *created = nullptr;
+    if (!options || sd_ctx_create(options.get(), &created) != SD_STATUS_OK) return nullptr;
+
+    Owned<sd_ctx_t> context(created);
+    return supported(context.get()) ? context.release() : nullptr;
+  }
+}
+
+extern "C" {
   EL_API void *el_sd_open(const char *model_path, const char *vae_path, int n_threads) {
-    sd_ctx_params_t params;
-    sd_ctx_params_init(&params);
-    params.model_path = model_path;
-    params.vae_path = vae_path;
-    params.n_threads = n_threads;
-
-    sd_set_log_callback(el_sd_log_cb, nullptr);
-    sd_set_progress_callback(el_sd_progress_cb, nullptr);
-
-    sd_ctx_t *ctx = new_sd_ctx(&params);
-    if (!ctx) return nullptr;
-
-    el_sd_handle *handle = new el_sd_handle{ctx};
-    return handle;
+    Options options(sd_ctx_opt_create());
+    options.text("model_path", model_path).text("vae_path", vae_path).integer("n_threads", n_threads);
+    return open(options, sd_ctx_supports_image_generation);
   }
 
   EL_API void *el_sd_open_video(const char *diffusion_model_path, const char *vae_path,
-                           const char *t5xxl_path, int n_threads) {
-    sd_ctx_params_t params;
-    sd_ctx_params_init(&params);
-    params.diffusion_model_path = diffusion_model_path;
-    params.vae_path = vae_path;
-    params.t5xxl_path = t5xxl_path;
-    params.n_threads = n_threads;
-
-    sd_set_log_callback(el_sd_log_cb, nullptr);
-    sd_set_progress_callback(el_sd_progress_cb, nullptr);
-
-    sd_ctx_t *ctx = new_sd_ctx(&params);
-    if (!ctx) return nullptr;
-
-    el_sd_handle *handle = new el_sd_handle{ctx};
-    return handle;
+                                const char *t5xxl_path, int n_threads) {
+    Options options(sd_ctx_opt_create());
+    options.text("diffusion_model_path", diffusion_model_path)
+      .text("vae_path", vae_path)
+      .text("t5xxl_path", t5xxl_path)
+      .integer("n_threads", n_threads);
+    return open(options, sd_ctx_supports_video_generation);
   }
 
-  EL_API bool el_sd_generate(void *handle_ptr, const char *prompt, const char *negative_prompt,
-                       int width, int height, int steps, int64_t seed, float cfg_scale,
-                       const char *output_path) {
-    el_sd_handle *handle = static_cast<el_sd_handle *>(handle_ptr);
-    if (!handle || !handle->ctx) return false;
+  EL_API bool el_sd_generate(void *handle, const char *prompt, const char *negative_prompt,
+                             int width, int height, int steps, int64_t seed, float cfg_scale,
+                             const char *output_path) {
+    Options options(sd_img_gen_opt_create());
+    options.text("prompt", prompt)
+      .text("negative_prompt", negative_prompt)
+      .integer("width", width)
+      .integer("height", height)
+      .integer("sample.steps", steps)
+      .integer("seed", seed)
+      .integer("batch_count", 1);
+    if (cfg_scale > 0) options.number("sample.guidance.txt_cfg", cfg_scale);
 
-    sd_img_gen_params_t params;
-    sd_img_gen_params_init(&params);
-    params.prompt = prompt;
-    params.negative_prompt = negative_prompt;
-    params.width = width;
-    params.height = height;
-    params.sample_params.sample_steps = steps;
-    if (cfg_scale > 0) params.sample_params.guidance.txt_cfg = cfg_scale;
-    params.seed = seed;
-    params.batch_count = 1;
-
-    sd_image_t *images = nullptr;
-    int num_images = 0;
-    bool ok = generate_image(handle->ctx, &params, &images, &num_images);
-    if (!ok || num_images < 1 || !images) return false;
-
-    bool written = el_sd_write_png(images[0], output_path);
-
-    free(images[0].data);
-    free(images);
-
-    return written;
+    auto result = run(sd_generate_image, static_cast<sd_ctx_t *>(handle), options);
+    return write_png(sd_result_get_image(result.get(), 0), output_path);
   }
 
-  EL_API bool el_sd_img2img(void *handle_ptr, const char *prompt, const char *negative_prompt,
-                       const char *input_path, float strength, int steps, int64_t seed,
-                       const char *output_path) {
-    el_sd_handle *handle = static_cast<el_sd_handle *>(handle_ptr);
-    if (!handle || !handle->ctx) return false;
+  EL_API bool el_sd_img2img(void *handle, const char *prompt, const char *negative_prompt,
+                            const char *input_path, float strength, int steps, int64_t seed,
+                            const char *output_path) {
+    auto input = read_png(input_path);
+    if (!input) return false;
 
-    sd_image_t init_image;
-    if (!el_sd_read_png(input_path, &init_image)) return false;
+    Options options(sd_img_gen_opt_create());
+    options.text("prompt", prompt)
+      .text("negative_prompt", negative_prompt)
+      .image("init_image", input.get())
+      .integer("width", sd_tensor_dim(input.get(), 1))
+      .integer("height", sd_tensor_dim(input.get(), 2))
+      .number("strength", strength)
+      .integer("sample.steps", steps)
+      .integer("seed", seed)
+      .integer("batch_count", 1);
 
-    sd_img_gen_params_t params;
-    sd_img_gen_params_init(&params);
-    params.prompt = prompt;
-    params.negative_prompt = negative_prompt;
-    params.init_image = init_image;
-    params.width = init_image.width;
-    params.height = init_image.height;
-    params.strength = strength;
-    params.sample_params.sample_steps = steps;
-    params.seed = seed;
-    params.batch_count = 1;
-
-    sd_image_t *images = nullptr;
-    int num_images = 0;
-    bool ok = generate_image(handle->ctx, &params, &images, &num_images);
-    free(init_image.data);
-    if (!ok || num_images < 1 || !images) return false;
-
-    bool written = el_sd_write_png(images[0], output_path);
-
-    free(images[0].data);
-    free(images);
-
-    return written;
+    auto result = run(sd_generate_image, static_cast<sd_ctx_t *>(handle), options);
+    return write_png(sd_result_get_image(result.get(), 0), output_path);
   }
 
   EL_API bool el_sd_upscale(const char *esrgan_path, const char *input_path,
-                       int n_threads, const char *output_path) {
-    sd_image_t input_image;
-    if (!el_sd_read_png(input_path, &input_image)) return false;
+                            int n_threads, const char *output_path) {
+    silence();
 
-    upscaler_ctx_t *upscaler = new_upscaler_ctx(esrgan_path, false, n_threads, 0, nullptr, nullptr);
-    if (!upscaler) {
-      free(input_image.data);
-      return false;
+    Options options(sd_upscale_opt_create());
+    options.image("image", read_png(input_path).get());
+    if (!options) return false;
+
+    Options model(sd_upscaler_opt_create());
+    model.text("model_path", esrgan_path).integer("n_threads", n_threads);
+
+    sd_upscaler_t *created = nullptr;
+    if (!model || sd_upscaler_create(model.get(), &created) != SD_STATUS_OK) return false;
+
+    Owned<sd_upscaler_t> upscaler(created);
+    auto result = run(sd_upscale, upscaler.get(), options);
+    return write_png(sd_result_get_image(result.get(), 0), output_path);
+  }
+
+  EL_API bool el_sd_video(void *handle, const char *prompt, const char *negative_prompt,
+                          int width, int height, int steps, int64_t seed, int video_frames, int fps,
+                          const char *output_dir) {
+    Options options(sd_vid_gen_opt_create());
+    options.text("prompt", prompt)
+      .text("negative_prompt", negative_prompt)
+      .integer("width", width)
+      .integer("height", height)
+      .integer("sample.steps", steps)
+      .integer("seed", seed)
+      .integer("video_frames", video_frames)
+      .integer("fps", fps);
+
+    auto result = run(sd_generate_video, static_cast<sd_ctx_t *>(handle), options);
+    size_t frames = sd_result_get_image_count(result.get());
+    bool written = frames > 0;
+    for (size_t i = 0; i < frames; i++) {
+      char name[32];
+      snprintf(name, sizeof(name), "/frame-%04zu.png", i);
+      written = write_png(sd_result_get_image(result.get(), i), output_dir + std::string(name)) && written;
     }
-
-    int factor = get_upscale_factor(upscaler);
-    sd_image_t *images = nullptr;
-    int num_images = 0;
-    bool ok = upscale(upscaler, input_image, static_cast<uint32_t>(factor), &images, &num_images);
-    free(input_image.data);
-    free_upscaler_ctx(upscaler);
-    if (!ok || num_images < 1 || !images) return false;
-
-    bool written = el_sd_write_png(images[0], output_path);
-    free(images[0].data);
-    free(images);
-
     return written;
   }
 
-  EL_API bool el_sd_video(void *handle_ptr, const char *prompt, const char *negative_prompt,
-                     int width, int height, int steps, int64_t seed, int video_frames, int fps,
-                     const char *output_dir) {
-    el_sd_handle *handle = static_cast<el_sd_handle *>(handle_ptr);
-    if (!handle || !handle->ctx) return false;
-
-    sd_vid_gen_params_t params;
-    sd_vid_gen_params_init(&params);
-    params.prompt = prompt;
-    params.negative_prompt = negative_prompt;
-    params.width = width;
-    params.height = height;
-    params.sample_params.sample_steps = steps;
-    params.seed = seed;
-    params.video_frames = video_frames;
-    params.fps = fps;
-
-    sd_image_t *frames = nullptr;
-    int num_frames = 0;
-    sd_audio_t *audio = nullptr;
-    bool ok = generate_video(handle->ctx, &params, &frames, &num_frames, &audio);
-    if (audio) free_sd_audio(audio);
-    if (!ok || num_frames < 1 || !frames) return false;
-
-    bool all_written = true;
-    char frame_path[4096];
-    for (int i = 0; i < num_frames; i++) {
-      snprintf(frame_path, sizeof(frame_path), "%s/frame-%04d.png", output_dir, i);
-      if (!el_sd_write_png(frames[i], frame_path)) all_written = false;
-      free(frames[i].data);
-    }
-    free(frames);
-
-    return all_written;
-  }
-
-  EL_API void el_sd_close(void *handle_ptr) {
-    el_sd_handle *handle = static_cast<el_sd_handle *>(handle_ptr);
-    if (!handle) return;
-    if (handle->ctx) free_sd_ctx(handle->ctx);
-    delete handle;
+  EL_API void el_sd_close(void *handle) {
+    sd_ctx_free(static_cast<sd_ctx_t *>(handle));
   }
 }
